@@ -1,10 +1,4 @@
-# Interface web
 streamlit>=1.25.0
-
-# Manipulation de données et Excel
 pandas>=2.0.0
 openpyxl>=3.1.0
-xlrd>=2.0.1  # pour les fichiers Excel .xls anciens
-
-# Gestion des dates (optionnel si besoin de fonctionnalités datetime avancées)
-python-dateutil>=2.8.2
+xlrd>=2.0.1
