@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import json, os
-import unicodedata
-from calendar import monthrange
+import json, os, unicodedata, re
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -31,25 +29,20 @@ def normalize_text(s):
     s = str(s).strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
-def extraire_periode(df):
-    """Recherche automatique d'une date MM/YYYY dans les 3 premières lignes"""
-    for r in range(min(3, len(df))):
-        for c in df.columns:
-            val = df.at[r, c]
-            if pd.isna(val):
-                continue
-            # Si c'est une date Excel ou datetime
-            if isinstance(val, (dt.datetime, dt.date, pd.Timestamp)):
-                return val
-            # Si c'est du texte MM/YYYY
-            s = str(val).strip()
-            if len(s) == 7 and s[2] == "/":
-                try:
-                    mois, annee = map(int, s.split("/"))
-                    return dt.date(annee, mois, 1)
-                except:
-                    continue
-    return None
+def get_periode_excel(xls):
+    """Lit la période depuis la 3ème ligne de la première feuille"""
+    try:
+        df = pd.read_excel(xls, sheet_name=xls.sheet_names[0], header=None, nrows=3, engine="openpyxl")
+        val = df.iloc[2,0]  # 3ème ligne, 1ère colonne
+        if isinstance(val, (pd.Timestamp, dt.datetime, dt.date)):
+            return val.month, val.year
+        # si c'est un texte format MM/YYYY
+        match = re.search(r"(\d{1,2})/(\d{4})", str(val))
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    except:
+        pass
+    return None, None
 
 # ==============================
 # --- Authentification ---
@@ -175,17 +168,14 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
 # ==============================
 # --- Détermination automatique de la période ---
 # ==============================
-periode_date = extraire_periode(df_familles)
-if periode_date is None:
+mois, annee = get_periode_excel(xls)
+if not mois or not annee:
     st.warning("Impossible de déterminer la période automatiquement. Utilisation de la date d'aujourd'hui.")
-    periode_date = dt.date.today()
+    today = dt.date.today()
+    mois, annee = today.month, today.year
 
-# Calcul dernier jour du mois
-dernier_jour = monthrange(periode_date.year, periode_date.month)[1]
-date_ecriture = dt.date(periode_date.year, periode_date.month, dernier_jour)
-
-# Libellé automatique au format CA MM-YYYY
-libelle_defaut = f"CA {periode_date.strftime('%m-%Y')}"
+date_ecriture = dt.date(annee, mois, 1)
+libelle_defaut = f"CA {mois:02d}-{annee}"
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 
 # ==============================
@@ -194,7 +184,6 @@ libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 col_fam_lib = "FAMILLE" if "FAMILLE" in df_familles.columns else df_familles.columns[0]
 familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib] if pd.notna(f) and "TOTAL" not in str(f).upper()]
 
-# Comptes familles
 st.sidebar.subheader("Comptes Familles")
 famille_to_compte_init = FAMILLES_DEFAUT.copy()
 famille_to_compte_init.update(params.get("famille_to_compte", {}))
@@ -262,7 +251,7 @@ for _, row in df_familles.iterrows():
 
 # 2️⃣ TVA collectée
 for _, row in df_tva.iterrows():
-    lib = str(row["LIBELLE TVA"]).upper()
+    lib = normalize_text(row["LIBELLE TVA"])
     if "EXONERE" in lib or "TOTAL" in lib or pd.isna(row["TVA"]): continue
     montant_tva = to_float(row["TVA"])
     if montant_tva <= 0: continue
