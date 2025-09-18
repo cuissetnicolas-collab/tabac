@@ -175,12 +175,12 @@ if not mois or not annee:
     today = dt.date.today()
     mois, annee = today.month, today.year
 
-# <<< MODIFICATION ICI : date au dernier jour du mois >>>
+# <<< DATE AU DERNIER JOUR DU MOIS >>>
 dernier_jour = calendar.monthrange(annee, mois)[1]
 date_ecriture = dt.date(annee, mois, dernier_jour)
 
-libelle_defaut = f"CA {mois:02d}-{annee}"
-libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
+# <<< LIBELLE UNIQUE POUR TOUTES LES LIGNES >>>
+libelle = f"CA {mois:02d}-{annee}"
 
 # ==============================
 # --- Paramètres comptes dynamiques ---
@@ -248,7 +248,7 @@ for _, row in df_familles.iterrows():
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
         "CODE JOURNAL": journal_code,
         "NUMERO DE COMPTE": compte,
-        "LIBELLE": f"{libelle} - {fam}",
+        "LIBELLE": libelle,
         "DEBIT": 0,
         "CREDIT": montant
     })
@@ -266,7 +266,7 @@ for _, row in df_tva.iterrows():
             "DATE": date_ecriture.strftime("%d/%m/%Y"),
             "CODE JOURNAL": journal_code,
             "NUMERO DE COMPTE": compte,
-            "LIBELLE": f"TVA {int(taux*100)}%",
+            "LIBELLE": libelle,
             "DEBIT": 0,
             "CREDIT": montant_tva
         })
@@ -310,7 +310,7 @@ for _, row in df_point.iterrows():
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
         "CODE JOURNAL": journal_code,
         "NUMERO DE COMPTE": compte_point_comptable,
-        "LIBELLE": f"{libelle} - {lib_str}",
+        "LIBELLE": libelle,
         "DEBIT": abs(montant),
         "CREDIT": 0
     })
