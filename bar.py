@@ -228,8 +228,8 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# Code journal
-journal_code = st.text_input("Code journal", value="VE")
+# <<< CODE JOURNAL CA >>>
+journal_code = st.text_input("Code journal", value="CA")
 
 # ==============================
 # --- Génération des écritures ---
