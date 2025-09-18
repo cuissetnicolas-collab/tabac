@@ -239,18 +239,25 @@ for _, row in df_tva.iterrows():
             "CREDIT": montant_tva
         })
 
-# 3️⃣ Encaissements tiroir
+# 3️⃣ Encaissements tiroir (correctif CB/ESPECES)
 for _, row in df_tiroir.iterrows():
     lib = str(row["Paiement"]).strip().upper()
     if "TOTAL" in lib or lib == "": continue
     montant = to_float(row["Montant en euro"])
     if montant <= 0: continue
-    compte = None
-    for key in tiroir_to_compte:
-        if key in lib:
-            compte = tiroir_to_compte[key]
-            break
-    if not compte: compte = "411100000"
+
+    # Correspondance des comptes
+    if "ESPECE" in lib:
+        compte = tiroir_to_compte["ESPECES"]
+    elif "CB" in lib or "CARTE" in lib:
+        compte = tiroir_to_compte["CB"]
+    elif "CHEQUE" in lib:
+        compte = tiroir_to_compte["CHEQUE"]
+    elif "VIREMENT" in lib:
+        compte = tiroir_to_compte["VIREMENT"]
+    else:
+        compte = "411100000"  # fallback
+
     ecritures.append({
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
         "CODE JOURNAL": journal_code,
