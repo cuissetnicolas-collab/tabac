@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import json, os, unicodedata, re
+import calendar
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -174,7 +175,10 @@ if not mois or not annee:
     today = dt.date.today()
     mois, annee = today.month, today.year
 
-date_ecriture = dt.date(annee, mois, 1)
+# <<< MODIFICATION ICI : date au dernier jour du mois >>>
+dernier_jour = calendar.monthrange(annee, mois)[1]
+date_ecriture = dt.date(annee, mois, dernier_jour)
+
 libelle_defaut = f"CA {mois:02d}-{annee}"
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 
