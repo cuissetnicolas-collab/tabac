@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import json, os
-import unicodedata
+import json, os, unicodedata
 import re
 
 # ==============================
@@ -30,6 +29,19 @@ def normalize_text(s):
     """Supprime accents, met en majuscules et strip"""
     s = str(s).strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+
+def extract_periode(df):
+    # Cherche MM/YYYY dans les 3 premières lignes
+    for i in range(min(3, len(df))):
+        for val in df.iloc[i]:
+            if pd.isna(val):
+                continue
+            if isinstance(val, pd.Timestamp):
+                return val.month, val.year
+            match = re.match(r"^(\d{2})/(\d{4})$", str(val).strip())
+            if match:
+                return int(match.group(1)), int(match.group(2))
+    return None, None
 
 # ==============================
 # --- Authentification ---
@@ -153,26 +165,16 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
 # ==============================
-# --- Détection de la période ---
+# --- Détermination de la période ---
 # ==============================
-def detect_periode(df):
-    for r in range(min(3, len(df))):
-        for c in df.columns:
-            cell = str(df.iloc[r][c]).strip()
-            match = re.search(r"(\d{2}/\d{4})", cell)
-            if match:
-                return match.group(1)
-    return None
+mois, annee = extract_periode(df_familles)
+if not mois or not annee:
+    st.warning("Impossible de déterminer la période automatiquement. Veuillez sélectionner manuellement.")
+    mois = st.sidebar.selectbox("Mois", list(range(1,13)), index=dt.date.today().month-1)
+    annee = st.sidebar.selectbox("Année", list(range(2020, dt.date.today().year+2)), index=dt.date.today().year-2020)
 
-periode_str = detect_periode(df_familles)
-if periode_str:
-    mois, annee = periode_str.split("/")
-    libelle_defaut = f"CA {mois}-{annee}"
-    date_ecriture = dt.date(int(annee), int(mois), 1)
-else:
-    st.warning("Impossible de déterminer la période automatiquement. Utilisation de la date d'aujourd'hui.")
-    date_ecriture = dt.date.today()
-    libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
+date_ecriture = dt.date(annee, mois, 1)
+libelle_defaut = f"CA {mois:02d}-{annee}"
 
 # ==============================
 # --- Paramètres comptes dynamiques ---
@@ -221,10 +223,7 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# ==============================
-# --- Paramètres écriture ---
-# ==============================
-# Libellé automatique modifiable
+# Libellé modifiable
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 
 # Code journal
