@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import json, os, unicodedata
-import re
+import json, os, re, unicodedata
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -31,14 +30,17 @@ def normalize_text(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
 def extract_periode(df):
-    # Cherche MM/YYYY dans les 3 premières lignes
+    """Essaye d'extraire MM/YYYY sur les 3 premières lignes"""
     for i in range(min(3, len(df))):
         for val in df.iloc[i]:
             if pd.isna(val):
                 continue
-            if isinstance(val, pd.Timestamp):
+            # Si c'est une date Pandas
+            if isinstance(val, (pd.Timestamp, dt.date, dt.datetime)):
                 return val.month, val.year
-            match = re.match(r"^(\d{2})/(\d{4})$", str(val).strip())
+            # Sinon on cherche un motif MM/YYYY
+            val_str = str(val).strip()
+            match = re.search(r"(\d{1,2})/(\d{4})", val_str)
             if match:
                 return int(match.group(1)), int(match.group(2))
     return None, None
@@ -165,7 +167,7 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
 # ==============================
-# --- Détermination de la période ---
+# --- Extraction période ---
 # ==============================
 mois, annee = extract_periode(df_familles)
 if not mois or not annee:
@@ -223,10 +225,10 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# Libellé modifiable
+# ==============================
+# --- Paramètres écriture ---
+# ==============================
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
-
-# Code journal
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
