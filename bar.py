@@ -11,18 +11,23 @@ from calendar import monthrange
 def to_float(x):
     if pd.isna(x): return 0.0
     s = str(x).replace("€","").replace(" ","").replace(",",".")
-    try: return float(s)
-    except ValueError: return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
 
 def parse_taux(x):
     if pd.isna(x): return None
     s = str(x).replace("%","").replace(" ","").replace(",",".")
-    try: val = float(s)
-    except ValueError: return None
+    try:
+        val = float(s)
+    except ValueError:
+        return None
     if val > 1: val = val/100
     return round(val,3)
 
 def normalize_text(s):
+    """Supprime accents, met en majuscules et strip"""
     s = str(s).strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFD', s)
                    if unicodedata.category(c) != 'Mn')
@@ -48,6 +53,9 @@ def login(username, password):
 if "login" not in st.session_state:
     st.session_state["login"] = False
 
+# ------------------------------
+# Bloc login
+# ------------------------------
 if not st.session_state["login"]:
     st.title("🔑 Veuillez entrer vos identifiants")
     username_input = st.text_input("Identifiant")
@@ -119,7 +127,7 @@ FAMILLES_DEFAUT = {
 try:
     import openpyxl
 except ImportError:
-    st.error("⚠️ openpyxl n'est pas installé.")
+    st.error("⚠️ openpyxl n'est pas installé. Vérifie ton requirements.txt et rebuild l'app.")
     st.stop()
 
 uploaded_file = st.file_uploader("Choisir le fichier Excel", type=["xls","xlsx"])
@@ -132,9 +140,7 @@ except Exception as e:
     st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
     st.stop()
 
-# ------------------------------
-# Lecture des feuilles nécessaires
-# ------------------------------
+# --- Lecture des feuilles principales ---
 try:
     df_familles = pd.read_excel(xls, sheet_name="ANALYSE FAMILLES", header=2, engine="openpyxl")
     df_tva      = pd.read_excel(xls, sheet_name="ANALYSE TVA", header=2, engine="openpyxl")
@@ -147,25 +153,36 @@ except Exception as e:
 for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
-# ------------------------------
-# Lecture de la période (Mois / Début)
-# ------------------------------
-# On prend le premier onglet du fichier (celui qui contient la période)
-df_periode = pd.read_excel(xls, sheet_name=xls.sheet_names[0], engine="openpyxl")
-periode_str = None
-for col in df_periode.columns:
-    if "Mois" in str(col) or "Début" in str(col):
-        periode_str = str(df_periode.iloc[0][col])
-        break
-if not periode_str:
-    st.error("Impossible de trouver la colonne 'Mois' ou 'Début' pour déterminer la période.")
-    st.stop()
-
-# conversion en date : dernier jour du mois
-mois, annee = periode_str.split("/")
-mois = int(mois); annee = int(annee)
-dernier_jour = monthrange(annee, mois)[1]
-date_auto = dt.date(annee, mois, dernier_jour)
+# ==============================
+# --- Lecture de la période ---
+# ==============================
+# on suppose qu'il y a un onglet (par ex. "Période") ou le 1er onglet
+try:
+    df_periode = pd.read_excel(xls, sheet_name=0, engine="openpyxl")
+    val = df_periode.iloc[0,0]  # première cellule
+    st.write("🔎 Période lue :", repr(val))  # debug visible seulement par toi
+    if isinstance(val,(dt.date,dt.datetime,pd.Timestamp)):
+        mois = val.month
+        annee = val.year
+    else:
+        s = str(val).strip()
+        if "/" in s:
+            part1, part2 = s.split("/")
+            if len(part1) == 2:   # "01/2025"
+                mois = int(part1)
+                annee = int(part2)
+            else:                 # "2025/01"
+                annee = int(part1)
+                mois = int(part2)
+        else:
+            raise ValueError("Format de période non reconnu : " + s)
+    dernier_jour = monthrange(annee, mois)[1]
+    date_ecriture = dt.date(annee, mois, dernier_jour)
+    libelle_defaut = f"CA {mois:02d}-{annee}"
+except Exception as e:
+    st.warning(f"Impossible de déterminer la période automatiquement ({e})")
+    date_ecriture = dt.date.today()
+    libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
 
 # ==============================
 # --- Paramètres comptes dynamiques ---
@@ -177,7 +194,6 @@ familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib]
 st.sidebar.subheader("Comptes Familles")
 famille_to_compte_init = FAMILLES_DEFAUT.copy()
 famille_to_compte_init.update(params.get("famille_to_compte", {}))
-
 famille_to_compte = {}
 for fam in familles_dyn:
     default = famille_to_compte_init.get(fam, "707000000")
@@ -191,7 +207,8 @@ for taux, def_cpt in default_tva.items():
     tva_to_compte[taux] = st.sidebar.text_input(f"Compte TVA {int(taux*100)}%", value=default)
 
 st.sidebar.subheader("Comptes Encaissements")
-default_tiroir = {"ESPECES": "530000000", "CB": "582000000", "CHEQUE": "581000000", "VIREMENT": "584000000"}
+default_tiroir = {"ESPECES": "530000000", "CB": "582000000",
+                  "CHEQUE": "581000000", "VIREMENT": "584000000"}
 tiroir_to_compte = {}
 for mode, def_cpt in default_tiroir.items():
     default = params.get("tiroir_to_compte", {}).get(mode, def_cpt)
@@ -213,9 +230,8 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
 # ==============================
 # --- Paramètres écriture ---
 # ==============================
-# ✅ Date d'écriture et libellé proposés depuis la période du fichier
-date_ecriture = st.date_input("Date d'écriture", value=date_auto)
-libelle_defaut = f"CA {periode_str}"
+# (date_ecriture et libelle_defaut déjà calculés)
+date_ecriture = st.date_input("Date d'écriture", value=date_ecriture)
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 journal_code = st.text_input("Code journal", value="VE")
 
@@ -265,7 +281,6 @@ for _, row in df_tiroir.iterrows():
     if "TOTAL" in lib or lib == "": continue
     montant = to_float(row["Montant en euro"])
     if montant <= 0: continue
-
     if "ESPECE" in lib:
         compte = tiroir_to_compte["ESPECES"]
     elif "CB" in lib or "CARTE" in lib:
@@ -276,7 +291,6 @@ for _, row in df_tiroir.iterrows():
         compte = tiroir_to_compte["VIREMENT"]
     else:
         compte = "411100000"
-
     ecritures.append({
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
         "CODE JOURNAL": journal_code,
@@ -312,8 +326,7 @@ total_credit = df_ecritures["CREDIT"].sum()
 st.write("Total DEBIT :", total_debit)
 st.write("Total CREDIT:", total_credit)
 if round(total_debit,2) != round(total_credit,2):
-    st.warning("⚠️ Les écritures ne sont pas équilibrées ! Écart : "
-               f"{round(total_debit - total_credit,2)} €")
+    st.warning(f"⚠️ Les écritures ne sont pas équilibrées ! Écart : {round(total_debit - total_credit,2)} €")
 else:
     st.success("✅ Les écritures sont équilibrées.")
 
