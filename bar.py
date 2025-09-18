@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import json, os
+import unicodedata
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -23,6 +24,11 @@ def parse_taux(x):
         return None
     if val > 1: val = val/100
     return round(val,3)
+
+def normalize_text(s):
+    """Supprime accents, met en majuscules et strip"""
+    s = str(s).strip().upper()
+    return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
 # ==============================
 # --- Authentification ---
@@ -239,14 +245,13 @@ for _, row in df_tva.iterrows():
             "CREDIT": montant_tva
         })
 
-# 3️⃣ Encaissements tiroir (correctif CB/ESPECES)
+# 3️⃣ Encaissements tiroir (normalisation incluse)
 for _, row in df_tiroir.iterrows():
-    lib = str(row["Paiement"]).strip().upper()
+    lib = normalize_text(row["Paiement"])
     if "TOTAL" in lib or lib == "": continue
     montant = to_float(row["Montant en euro"])
     if montant <= 0: continue
 
-    # Correspondance des comptes
     if "ESPECE" in lib:
         compte = tiroir_to_compte["ESPECES"]
     elif "CB" in lib or "CARTE" in lib:
@@ -256,7 +261,7 @@ for _, row in df_tiroir.iterrows():
     elif "VIREMENT" in lib:
         compte = tiroir_to_compte["VIREMENT"]
     else:
-        compte = "411100000"  # fallback
+        compte = "411100000"
 
     ecritures.append({
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
