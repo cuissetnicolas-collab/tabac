@@ -338,3 +338,8 @@ df_ecritures.to_excel(output_file, index=False)
 st.download_button("📥 Télécharger le fichier généré",
                    data=open(output_file,"rb"),
                    file_name=output_file)
+
+# ==============================
+# --- Mention auteur ---
+# ==============================
+st.markdown("<hr><p style='text-align:center; font-size:12px;'>⚡ Application créée par Nicolas Cuisset</p>", unsafe_allow_html=True)
