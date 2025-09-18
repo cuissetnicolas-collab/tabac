@@ -84,6 +84,36 @@ params = charger_parametres()
 st.sidebar.header("⚙️ Paramètres des comptes")
 
 # ==============================
+# --- Comptes familles par défaut ---
+# ==============================
+FAMILLES_DEFAUT = {
+    "Accessoires fumeurs": "707100000",
+    "Articles Divers Logista 20%": "707100000",
+    "Bar 10%": "707010000",
+    "Bar 20%": "707000000",
+    "Boissons A Emporter": "707020000",
+    "Boissons à emporter": "707022000",
+    "Brasserie 10%": "707600000",
+    "Brasserie A Emporter": "707021000",
+    "Briquets": "707100000",
+    "Chewing Gum": "707200000",
+    "Chocolat 5,5%": "707210000",
+    "Cigarettes Electroniques": "707100000",
+    "Confiserie 20%": "707210000",
+    "Confiserie 5,5%": "707210000",
+    "Jeux instantanés": "467700000",
+    "Loto": "467700000",
+    "MONETIQUE 0 %": "467900000",
+    "Paiement de Proximite": "467900000",
+    "Papier tubes et filtres": "707400000",
+    "Publication": "467600000",
+    "Tabac": "467100000",
+    "TELEPHONIE 20.00 %": "707300000",
+    "Timbres poste": "467200000",
+    "Transport": "467400000"
+}
+
+# ==============================
 # --- Upload fichier Excel ---
 # ==============================
 try:
@@ -123,9 +153,12 @@ familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib] if pd.notna(f) 
 
 # Comptes familles
 st.sidebar.subheader("Comptes Familles")
+famille_to_compte_init = FAMILLES_DEFAUT.copy()
+famille_to_compte_init.update(params.get("famille_to_compte", {}))
+
 famille_to_compte = {}
 for fam in familles_dyn:
-    default = params.get("famille_to_compte", {}).get(fam, "707000000")
+    default = famille_to_compte_init.get(fam, "707000000")
     famille_to_compte[fam] = st.sidebar.text_input(f"Compte pour {fam}", value=default)
 
 # Comptes TVA
