@@ -202,7 +202,12 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
 # --- Paramètres écriture ---
 # ==============================
 date_ecriture = st.date_input("Date d'écriture", value=dt.date.today())
-libelle = st.text_input("Libellé d'écriture", value=f"CA {date_ecriture.strftime('%m-%Y')}")
+
+# Libellé automatique au format CA mm-YYYY, modifiable
+libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
+libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
+
+# Code journal
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
