@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import json, os, re, unicodedata
+import json, os, unicodedata, re
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -29,20 +29,19 @@ def normalize_text(s):
     s = str(s).strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
-def extract_periode(df):
-    """Essaye d'extraire MM/YYYY sur les 3 premières lignes"""
-    for i in range(min(3, len(df))):
-        for val in df.iloc[i]:
-            if pd.isna(val):
-                continue
-            # Si c'est une date Pandas
-            if isinstance(val, (pd.Timestamp, dt.date, dt.datetime)):
-                return val.month, val.year
-            # Sinon on cherche un motif MM/YYYY
-            val_str = str(val).strip()
-            match = re.search(r"(\d{1,2})/(\d{4})", val_str)
-            if match:
-                return int(match.group(1)), int(match.group(2))
+def get_periode_excel(xls):
+    """Lit la période depuis la 3ème ligne de la première feuille"""
+    try:
+        df = pd.read_excel(xls, sheet_name=xls.sheet_names[0], header=None, nrows=3, engine="openpyxl")
+        val = df.iloc[2,0]  # 3ème ligne, 1ère colonne
+        if isinstance(val, (pd.Timestamp, dt.datetime, dt.date)):
+            return val.month, val.year
+        # si c'est un texte format MM/YYYY
+        match = re.search(r"(\d{1,2})/(\d{4})", str(val))
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    except:
+        pass
     return None, None
 
 # ==============================
@@ -167,16 +166,17 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
 # ==============================
-# --- Extraction période ---
+# --- Détermination automatique de la période ---
 # ==============================
-mois, annee = extract_periode(df_familles)
+mois, annee = get_periode_excel(xls)
 if not mois or not annee:
-    st.warning("Impossible de déterminer la période automatiquement. Veuillez sélectionner manuellement.")
-    mois = st.sidebar.selectbox("Mois", list(range(1,13)), index=dt.date.today().month-1)
-    annee = st.sidebar.selectbox("Année", list(range(2020, dt.date.today().year+2)), index=dt.date.today().year-2020)
+    st.warning("Impossible de déterminer la période automatiquement. Utilisation de la date d'aujourd'hui.")
+    today = dt.date.today()
+    mois, annee = today.month, today.year
 
 date_ecriture = dt.date(annee, mois, 1)
 libelle_defaut = f"CA {mois:02d}-{annee}"
+libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 
 # ==============================
 # --- Paramètres comptes dynamiques ---
@@ -184,7 +184,6 @@ libelle_defaut = f"CA {mois:02d}-{annee}"
 col_fam_lib = "FAMILLE" if "FAMILLE" in df_familles.columns else df_familles.columns[0]
 familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib] if pd.notna(f) and "TOTAL" not in str(f).upper()]
 
-# Comptes familles
 st.sidebar.subheader("Comptes Familles")
 famille_to_compte_init = FAMILLES_DEFAUT.copy()
 famille_to_compte_init.update(params.get("famille_to_compte", {}))
@@ -225,10 +224,7 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# ==============================
-# --- Paramètres écriture ---
-# ==============================
-libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
+# Code journal
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
@@ -255,7 +251,7 @@ for _, row in df_familles.iterrows():
 
 # 2️⃣ TVA collectée
 for _, row in df_tva.iterrows():
-    lib = str(row["LIBELLE TVA"]).upper()
+    lib = normalize_text(row["LIBELLE TVA"])
     if "EXONERE" in lib or "TOTAL" in lib or pd.isna(row["TVA"]): continue
     montant_tva = to_float(row["TVA"])
     if montant_tva <= 0: continue
