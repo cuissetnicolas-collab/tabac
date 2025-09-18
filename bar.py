@@ -27,93 +27,46 @@ def parse_taux(x):
 # ==============================
 # --- Authentification ---
 # ==============================
-if "login" not in st.session_state:
-    st.session_state["login"] = False
-if "username" not in st.session_state:
-    st.session_state["username"] = ""
-
 USERS = {
     "aurore": {"password": "12345", "name": "Aurore Demoulin"},
-    "nicolas": {"password": "12345", "name": "Nicolas Cuisset"},
-    "manana": {"password": "46789", "name": "Manana"}
+    "nicolas": {"password": "12345", "name": "Nicolas Cuisset"}
 }
 
 def login(username, password):
     if username in USERS and password == USERS[username]["password"]:
-        st.session_state["username"] = USERS[username]["name"]
+        st.session_state["login"] = True
+        st.session_state["username"] = username
+        st.session_state["name"] = USERS[username]["name"]
         return True
     return False
 
-if not st.session_state["login"]:
-    st.title("🔑 Connexion")
-    username = st.text_input("Nom d'utilisateur")
-    password = st.text_input("Mot de passe", type="password")
-    if st.button("Se connecter"):
-        if login(username, password):
-            st.session_state["login"] = True
-            st.success(f"Bienvenue {st.session_state['username']} 👋")
-            st.rerun()
-        else:
-            st.error("Identifiants incorrects")
-    st.stop()
-
-# Sidebar utilisateur
-st.sidebar.markdown(f"### 👤 Connecté en tant que\n**{st.session_state['username']}**")
-if st.sidebar.button("🚪 Déconnexion"):
+if "login" not in st.session_state:
     st.session_state["login"] = False
-    st.session_state["username"] = ""
-    st.rerun()
 
-# ==============================
-# --- Gestion clients ---
-# ==============================
-CLIENTS_FILE = "clients.json"
-
-def load_clients():
-    if os.path.exists(CLIENTS_FILE):
-        with open(CLIENTS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
-
-def save_clients(clients):
-    with open(CLIENTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(clients, f, indent=2, ensure_ascii=False)
-
-clients = load_clients()
-
-st.sidebar.header("👥 Gestion des clients")
-
-if clients:
-    selected_client = st.sidebar.selectbox("Sélectionner un client :", clients)
-else:
-    selected_client = None
-    st.sidebar.info("Aucun client enregistré.")
-
-# Ajouter un client
-with st.sidebar.expander("➕ Ajouter un client"):
-    new_client = st.text_input("Nom du nouveau client")
-    if st.button("Créer client"):
-        if new_client.strip() and new_client not in clients:
-            clients.append(new_client.strip())
-            save_clients(clients)
-            st.sidebar.success(f"Client '{new_client}' ajouté.")
-            st.rerun()
-
-# Supprimer un client
-if selected_client:
-    if st.sidebar.button(f"🗑️ Supprimer {selected_client}"):
-        clients.remove(selected_client)
-        save_clients(clients)
-        st.sidebar.warning(f"Client '{selected_client}' supprimé.")
-        st.rerun()
-
-if not selected_client:
+# ------------------------------
+# Bloc login
+# ------------------------------
+if not st.session_state["login"]:
+    st.title("🔑 Veuillez entrer vos identifiants")
+    username_input = st.text_input("Identifiant")
+    password_input = st.text_input("Mot de passe", type="password")
+    if st.button("Connexion"):
+        if login(username_input, password_input):
+            st.success(f"Bienvenue {st.session_state['name']} 👋")
+            st.experimental_rerun() if hasattr(st, "experimental_rerun") else st.stop()
+        else:
+            st.error("❌ Identifiants incorrects")
     st.stop()
 
+st.sidebar.success(f"Bienvenue {st.session_state['name']} 👋")
+if st.sidebar.button("Déconnexion"):
+    st.session_state["login"] = False
+    st.experimental_rerun() if hasattr(st, "experimental_rerun") else st.stop()
+
 # ==============================
-# --- Paramètres comptes par client ---
+# --- Gestion paramètres utilisateurs ---
 # ==============================
-PARAM_FILE = f"parametres_{selected_client}.json"
+PARAM_FILE = f"parametres_comptes_{st.session_state['username']}.json"
 
 def charger_parametres():
     if os.path.exists(PARAM_FILE):
@@ -126,26 +79,47 @@ def sauvegarder_parametres(params):
         json.dump(params, f, ensure_ascii=False, indent=2)
 
 params = charger_parametres()
-
 st.sidebar.header("⚙️ Paramètres des comptes")
 
 # ==============================
 # --- Upload fichier Excel ---
 # ==============================
+try:
+    import openpyxl
+except ImportError:
+    st.error("⚠️ openpyxl n'est pas installé. Vérifie ton requirements.txt et rebuild l'app.")
+    st.stop()
+
 uploaded_file = st.file_uploader("Choisir le fichier Excel", type=["xls","xlsx"])
 if not uploaded_file:
     st.stop()
 
-xls = pd.ExcelFile(uploaded_file)
+try:
+    xls = pd.ExcelFile(uploaded_file, engine="openpyxl")
+except Exception as e:
+    st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
+    st.stop()
 
-# Lire familles
-df_familles = pd.read_excel(xls, sheet_name="ANALYSE FAMILLES", header=2)
-df_familles.columns = [str(c).strip() for c in df_familles.columns]
+# --- Lecture des feuilles ---
+try:
+    df_familles = pd.read_excel(xls, sheet_name="ANALYSE FAMILLES", header=2, engine="openpyxl")
+    df_tva      = pd.read_excel(xls, sheet_name="ANALYSE TVA", header=2, engine="openpyxl")
+    df_tiroir   = pd.read_excel(xls, sheet_name="Solde tiroir", header=2, engine="openpyxl")
+    df_point    = pd.read_excel(xls, sheet_name="Point comptable", header=6, engine="openpyxl")
+except Exception as e:
+    st.error(f"Erreur lors de la lecture des feuilles Excel : {e}")
+    st.stop()
+
+for df in [df_familles, df_tva, df_tiroir, df_point]:
+    df.columns = [str(c).strip() for c in df.columns]
+
+# ==============================
+# --- Paramètres comptes dynamiques ---
+# ==============================
 col_fam_lib = "FAMILLE" if "FAMILLE" in df_familles.columns else df_familles.columns[0]
-
 familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib] if pd.notna(f) and "TOTAL" not in str(f).upper()]
 
-# Comptes familles dynamiques
+# Comptes familles
 st.sidebar.subheader("Comptes Familles")
 famille_to_compte = {}
 for fam in familles_dyn:
@@ -172,7 +146,7 @@ for mode, def_cpt in default_tiroir.items():
 default_point = params.get("compte_point_comptable", "65800000")
 compte_point_comptable = st.sidebar.text_input("Compte Point Comptable", value=default_point)
 
-# Bouton sauvegarde paramètres
+# Sauvegarde paramètres
 if st.sidebar.button("💾 Sauvegarder paramètres"):
     params_new = {
         "famille_to_compte": famille_to_compte,
@@ -191,17 +165,7 @@ libelle = st.text_input("Libellé d'écriture", value=f"CA {date_ecriture.strfti
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
-# Lecture autres feuilles
-# ==============================
-df_tva      = pd.read_excel(xls, sheet_name="ANALYSE TVA", header=2)
-df_tiroir   = pd.read_excel(xls, sheet_name="Solde tiroir", header=2)
-df_point    = pd.read_excel(xls, sheet_name="Point comptable", header=6)
-
-for df in [df_tva, df_tiroir, df_point]:
-    df.columns = [str(c).strip() for c in df.columns]
-
-# ==============================
-# Génération des écritures (logique inchangée)
+# --- Génération des écritures ---
 # ==============================
 ecritures = []
 
@@ -296,7 +260,7 @@ st.subheader("👀 Aperçu des écritures générées")
 st.dataframe(df_ecritures)
 
 # Export Excel
-output_file = f"ECRITURES_COMPTABLES_{selected_client}.xlsx"
+output_file = "ECRITURES_COMPTABLES.xlsx"
 df_ecritures.to_excel(output_file, index=False)
 st.download_button("📥 Télécharger le fichier généré",
                    data=open(output_file,"rb"),
