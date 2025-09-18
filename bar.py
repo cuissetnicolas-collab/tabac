@@ -178,7 +178,7 @@ for mode, def_cpt in default_tiroir.items():
     tiroir_to_compte[mode] = st.sidebar.text_input(f"Compte pour {mode}", value=default)
 
 # Compte point comptable
-default_point = params.get("compte_point_comptable", "65800000")
+default_point = params.get("compte_point_comptable", "467700000")
 compte_point_comptable = st.sidebar.text_input("Compte Point Comptable", value=default_point)
 
 # Sauvegarde paramètres
