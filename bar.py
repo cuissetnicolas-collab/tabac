@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import json, os, unicodedata, re, calendar
+import json, os, unicodedata, calendar
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -49,9 +49,7 @@ def login(username, password):
 if "login" not in st.session_state:
     st.session_state["login"] = False
 
-# ------------------------------
 # Bloc login
-# ------------------------------
 if not st.session_state["login"]:
     st.title("🔑 Veuillez entrer vos identifiants")
     username_input = st.text_input("Identifiant")
@@ -136,7 +134,7 @@ except Exception as e:
     st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
     st.stop()
 
-# --- Lecture des feuilles ---
+# Lecture des feuilles
 try:
     df_familles = pd.read_excel(xls, sheet_name="ANALYSE FAMILLES", header=2, engine="openpyxl")
     df_tva      = pd.read_excel(xls, sheet_name="ANALYSE TVA", header=2, engine="openpyxl")
@@ -150,24 +148,21 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
 # ==============================
-# --- Détermination de la période ---
+# --- Période ---
 # ==============================
-periode_str = None
-for i in range(min(3, df_familles.shape[0])):
-    row_values = df_familles.iloc[i].astype(str).values
-    for val in row_values:
-        if re.match(r"\d{2}/\d{4}", val):
-            periode_str = val
-            break
-    if periode_str: break
+periode_str = st.text_input("Période (mm/YYYY) si non détectée automatiquement", "")
 
 if periode_str:
-    mois, annee = map(int, periode_str.split("/"))
-    dernier_jour = calendar.monthrange(annee, mois)[1]
-    date_ecriture = dt.date(annee, mois, dernier_jour)
-    libelle_defaut = f"CA {periode_str}"
+    try:
+        mois, annee = map(int, periode_str.split("/"))
+        dernier_jour = calendar.monthrange(annee, mois)[1]
+        date_ecriture = dt.date(annee, mois, dernier_jour)
+        libelle_defaut = f"CA {periode_str}"
+    except:
+        st.warning("Format de période incorrect. Utilisation de la date d'aujourd'hui.")
+        date_ecriture = dt.date.today()
+        libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
 else:
-    st.warning("Impossible de déterminer la période automatiquement. Utilisation de la date d'aujourd'hui.")
     date_ecriture = dt.date.today()
     libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
 
@@ -181,7 +176,6 @@ familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib] if pd.notna(f) 
 st.sidebar.subheader("Comptes Familles")
 famille_to_compte_init = FAMILLES_DEFAUT.copy()
 famille_to_compte_init.update(params.get("famille_to_compte", {}))
-
 famille_to_compte = {}
 for fam in familles_dyn:
     default = famille_to_compte_init.get(fam, "707000000")
@@ -218,10 +212,8 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# Libellé modifiable
+# Libellé
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
-
-# Code journal
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
@@ -308,9 +300,7 @@ for _, row in df_point.iterrows():
         "CREDIT": 0
     })
 
-# ==============================
 # Vérification équilibre
-# ==============================
 df_ecritures = pd.DataFrame(ecritures)
 total_debit  = df_ecritures["DEBIT"].sum()
 total_credit = df_ecritures["CREDIT"].sum()
