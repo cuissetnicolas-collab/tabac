@@ -35,6 +35,7 @@ if "username" not in st.session_state:
 USERS = {
     "aurore": {"password": "12345", "name": "Aurore Demoulin"},
     "nicolas": {"password": "12345", "name": "Nicolas Cuisset"}
+    "manana": {"password": "46789", "name": "Nicolas Cuisset"}
 }
 
 def login(username, password):
