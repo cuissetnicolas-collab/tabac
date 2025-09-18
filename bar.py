@@ -25,7 +25,6 @@ def parse_taux(x):
     return round(val,3)
 
 def normalize_text(s):
-    """Supprime accents, met en majuscules et strip"""
     s = str(s).strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
@@ -124,7 +123,7 @@ FAMILLES_DEFAUT = {
 try:
     import openpyxl
 except ImportError:
-    st.error("⚠️ openpyxl n'est pas installé. Vérifie ton requirements.txt et rebuild l'app.")
+    st.error("⚠️ openpyxl n'est pas installé.")
     st.stop()
 
 uploaded_file = st.file_uploader("Choisir le fichier Excel", type=["xls","xlsx"])
@@ -151,10 +150,9 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
 # ==============================
-# --- Détermination de la période (MM/YYYY) ---
+# --- Détermination de la période ---
 # ==============================
 periode_str = None
-# On cherche dans les 3 premières lignes de la feuille "ANALYSE FAMILLES"
 for i in range(min(3, df_familles.shape[0])):
     row_values = df_familles.iloc[i].astype(str).values
     for val in row_values:
@@ -165,7 +163,6 @@ for i in range(min(3, df_familles.shape[0])):
 
 if periode_str:
     mois, annee = map(int, periode_str.split("/"))
-    # Dernier jour du mois
     dernier_jour = calendar.monthrange(annee, mois)[1]
     date_ecriture = dt.date(annee, mois, dernier_jour)
     libelle_defaut = f"CA {periode_str}"
@@ -221,10 +218,10 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# ==============================
-# --- Paramètres écriture ---
-# ==============================
+# Libellé modifiable
 libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
+
+# Code journal
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
