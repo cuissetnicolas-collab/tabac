@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import json, os, unicodedata, calendar
+import json, os
+import unicodedata
+from calendar import monthrange
 
 # ==============================
 # --- Fonctions utilitaires ---
@@ -25,8 +27,29 @@ def parse_taux(x):
     return round(val,3)
 
 def normalize_text(s):
+    """Supprime accents, met en majuscules et strip"""
     s = str(s).strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+
+def extraire_periode(df):
+    """Recherche automatique d'une date MM/YYYY dans les 3 premières lignes"""
+    for r in range(min(3, len(df))):
+        for c in df.columns:
+            val = df.at[r, c]
+            if pd.isna(val):
+                continue
+            # Si c'est une date Excel ou datetime
+            if isinstance(val, (dt.datetime, dt.date, pd.Timestamp)):
+                return val
+            # Si c'est du texte MM/YYYY
+            s = str(val).strip()
+            if len(s) == 7 and s[2] == "/":
+                try:
+                    mois, annee = map(int, s.split("/"))
+                    return dt.date(annee, mois, 1)
+                except:
+                    continue
+    return None
 
 # ==============================
 # --- Authentification ---
@@ -49,7 +72,9 @@ def login(username, password):
 if "login" not in st.session_state:
     st.session_state["login"] = False
 
+# ------------------------------
 # Bloc login
+# ------------------------------
 if not st.session_state["login"]:
     st.title("🔑 Veuillez entrer vos identifiants")
     username_input = st.text_input("Identifiant")
@@ -121,7 +146,7 @@ FAMILLES_DEFAUT = {
 try:
     import openpyxl
 except ImportError:
-    st.error("⚠️ openpyxl n'est pas installé.")
+    st.error("⚠️ openpyxl n'est pas installé. Vérifie ton requirements.txt et rebuild l'app.")
     st.stop()
 
 uploaded_file = st.file_uploader("Choisir le fichier Excel", type=["xls","xlsx"])
@@ -134,7 +159,7 @@ except Exception as e:
     st.error(f"Erreur lors de la lecture du fichier Excel : {e}")
     st.stop()
 
-# Lecture des feuilles
+# --- Lecture des feuilles ---
 try:
     df_familles = pd.read_excel(xls, sheet_name="ANALYSE FAMILLES", header=2, engine="openpyxl")
     df_tva      = pd.read_excel(xls, sheet_name="ANALYSE TVA", header=2, engine="openpyxl")
@@ -148,23 +173,20 @@ for df in [df_familles, df_tva, df_tiroir, df_point]:
     df.columns = [str(c).strip() for c in df.columns]
 
 # ==============================
-# --- Période ---
+# --- Détermination automatique de la période ---
 # ==============================
-periode_str = st.text_input("Période (mm/YYYY) si non détectée automatiquement", "")
+periode_date = extraire_periode(df_familles)
+if periode_date is None:
+    st.warning("Impossible de déterminer la période automatiquement. Utilisation de la date d'aujourd'hui.")
+    periode_date = dt.date.today()
 
-if periode_str:
-    try:
-        mois, annee = map(int, periode_str.split("/"))
-        dernier_jour = calendar.monthrange(annee, mois)[1]
-        date_ecriture = dt.date(annee, mois, dernier_jour)
-        libelle_defaut = f"CA {periode_str}"
-    except:
-        st.warning("Format de période incorrect. Utilisation de la date d'aujourd'hui.")
-        date_ecriture = dt.date.today()
-        libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
-else:
-    date_ecriture = dt.date.today()
-    libelle_defaut = f"CA {date_ecriture.strftime('%m-%Y')}"
+# Calcul dernier jour du mois
+dernier_jour = monthrange(periode_date.year, periode_date.month)[1]
+date_ecriture = dt.date(periode_date.year, periode_date.month, dernier_jour)
+
+# Libellé automatique au format CA MM-YYYY
+libelle_defaut = f"CA {periode_date.strftime('%m-%Y')}"
+libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
 
 # ==============================
 # --- Paramètres comptes dynamiques ---
@@ -176,6 +198,7 @@ familles_dyn = [str(f).strip() for f in df_familles[col_fam_lib] if pd.notna(f) 
 st.sidebar.subheader("Comptes Familles")
 famille_to_compte_init = FAMILLES_DEFAUT.copy()
 famille_to_compte_init.update(params.get("famille_to_compte", {}))
+
 famille_to_compte = {}
 for fam in familles_dyn:
     default = famille_to_compte_init.get(fam, "707000000")
@@ -212,8 +235,7 @@ if st.sidebar.button("💾 Sauvegarder paramètres"):
     sauvegarder_parametres(params_new)
     st.sidebar.success("Paramètres sauvegardés ✅")
 
-# Libellé
-libelle = st.text_input("Libellé d'écriture", value=libelle_defaut)
+# Code journal
 journal_code = st.text_input("Code journal", value="VE")
 
 # ==============================
@@ -300,7 +322,9 @@ for _, row in df_point.iterrows():
         "CREDIT": 0
     })
 
+# ==============================
 # Vérification équilibre
+# ==============================
 df_ecritures = pd.DataFrame(ecritures)
 total_debit  = df_ecritures["DEBIT"].sum()
 total_credit = df_ecritures["CREDIT"].sum()
