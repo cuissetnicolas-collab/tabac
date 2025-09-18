@@ -30,7 +30,8 @@ def parse_taux(x):
 USERS = {
     "aurore": {"password": "12345", "name": "Aurore Demoulin"},
     "nicolas": {"password": "12345", "name": "Nicolas Cuisset"},
-    "manana": {"password": "46789", "name": "Manana"}
+    "manana": {"password": "46789", "name": "Manana"},
+    "louis": {"password": "195827", "name": "Louis le plus grand collaborateur du monde"}
 }
 
 def login(username, password):
