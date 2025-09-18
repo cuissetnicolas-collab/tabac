@@ -163,7 +163,7 @@ for fam in familles_dyn:
 
 # Comptes TVA
 st.sidebar.subheader("Comptes TVA")
-default_tva = {0.055: "445710060", 0.10: "445710090", 0.20: "445710080"}
+default_tva = {0.055: "445710060", 0.10: "445710080", 0.20: "445710090"}
 tva_to_compte = {}
 for taux, def_cpt in default_tva.items():
     default = params.get("tva_to_compte", {}).get(str(taux), def_cpt)
@@ -171,7 +171,7 @@ for taux, def_cpt in default_tva.items():
 
 # Comptes encaissements
 st.sidebar.subheader("Comptes Encaissements")
-default_tiroir = {"ESPECES": "530000000", "CB": "411100003", "CHEQUE": "411100004", "VIREMENT": "411100005"}
+default_tiroir = {"ESPECES": "530000000", "CB": "582000000", "CHEQUE": "581000000", "VIREMENT": "584000000"}
 tiroir_to_compte = {}
 for mode, def_cpt in default_tiroir.items():
     default = params.get("tiroir_to_compte", {}).get(mode, def_cpt)
