@@ -52,7 +52,8 @@ USERS = {
     "aurore": {"password": "12345", "name": "Aurore Demoulin"},
     "nicolas": {"password": "12345", "name": "Nicolas Cuisset"},
     "manana": {"password": "46789", "name": "Manana"},
-    "louis": {"password": "195827", "name": "Louis le plus grand collaborateur du monde"}
+    "louis": {"password": "195827", "name": "Louis le plus grand collaborateur du monde"},
+    "majdi" : {"password": "Z5yOSoCaTUJmBkuj", "name": "Majdi"}
 }
 
 def login(username, password):
