@@ -247,7 +247,7 @@ col_fam_caht = "CA HT" if "CA HT" in df_familles.columns else df_familles.column
 col_fam_cattc = "CA TTC" if "CA TTC" in df_familles.columns else col_fam_caht
 
 # 1️⃣ CA HT par famille (TRANSPORT en TTC)
-tva_transport = 0
+tva_transport_par_taux = {}  # TVA à retirer par taux
 for _, row in df_familles.iterrows():
     fam = str(row[col_fam_lib])
     fam_norm = normalize_text(fam)
@@ -255,9 +255,11 @@ for _, row in df_familles.iterrows():
         continue
 
     if fam_norm == "TRANSPORT":
-        montant = to_float(row[col_fam_cattc])
-        montant_ht = to_float(row[col_fam_caht])
-        tva_transport = montant - montant_ht
+        montant_ttc = to_float(row[col_fam_cattc])
+        montant_ht  = to_float(row[col_fam_caht])
+        taux_transport = 0.20  # supposé taux de TVA sur Z pour le transport
+        tva_transport_par_taux[taux_transport] = montant_ttc - montant_ht
+        montant = montant_ttc
     else:
         montant = to_float(row[col_fam_caht])
 
@@ -265,7 +267,6 @@ for _, row in df_familles.iterrows():
         continue
 
     compte = famille_to_compte.get(fam, "707000000")
-
     ecritures.append({
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
         "CODE JOURNAL": journal_code,
@@ -278,19 +279,20 @@ for _, row in df_familles.iterrows():
 # 2️⃣ TVA collectée
 for _, row in df_tva.iterrows():
     lib = normalize_text(row["LIBELLE TVA"])
-    if "EXONERE" in lib or "TOTAL" in lib or pd.isna(row["TVA"]) or lib == "TRANSPORT":
+    if "EXONERE" in lib or "TOTAL" in lib or pd.isna(row["TVA"]):
         continue
 
     montant_tva = to_float(row["TVA"])
-    # enlever TVA transport
-    if tva_transport > 0:
-        montant_tva -= tva_transport
-        tva_transport = 0
+    taux = parse_taux(row["Taux"])
+
+    # Retirer la TVA transport si applicable
+    if taux in tva_transport_par_taux:
+        montant_tva -= tva_transport_par_taux[taux]
+        tva_transport_par_taux[taux] = 0
 
     if montant_tva <= 0:
         continue
 
-    taux = parse_taux(row["Taux"])
     compte = tva_to_compte.get(taux)
     if compte:
         ecritures.append({
