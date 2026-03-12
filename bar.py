@@ -121,7 +121,7 @@ FAMILLES_DEFAUT = {
     "Chewing Gum": "707200000",
     "Chocolat 5,5%": "707210000",
     "Cigarettes Electroniques": "707100000",
-    "Confiserie 20%": "707210000",
+    "Confiserie 20%": "707200000",
     "Confiserie 5,5%": "707210000",
     "Jeux instantanés": "467700000",
     "Loto": "467700000",
@@ -195,7 +195,12 @@ famille_to_compte_init.update(params.get("famille_to_compte", {}))
 
 famille_to_compte = {}
 for fam in familles_dyn:
-    default = famille_to_compte_init.get(fam, "707000000")
+    fam_norm = normalize_text(fam)
+    default = "707000000"
+    for f_defaut, compte_defaut in famille_to_compte_init.items():
+        if normalize_text(f_defaut) == fam_norm:
+            default = compte_defaut
+            break
     famille_to_compte[fam] = st.sidebar.text_input(f"Compte pour {fam}", value=default)
 
 # Comptes TVA
@@ -237,14 +242,30 @@ journal_code = st.text_input("Code journal", value="CA")
 # ==============================
 ecritures = []
 
-# 1️⃣ CA HT par famille
+# --- colonnes CA ---
 col_fam_caht = "CA HT" if "CA HT" in df_familles.columns else df_familles.columns[1]
+col_fam_cattc = "CA TTC" if "CA TTC" in df_familles.columns else col_fam_caht
+
+# 1️⃣ CA HT par famille (TRANSPORT en TTC)
+tva_transport = 0
 for _, row in df_familles.iterrows():
     fam = str(row[col_fam_lib])
-    if "TOTAL" in fam.upper(): continue
-    montant = to_float(row[col_fam_caht])
-    if montant <= 0: continue
+    fam_norm = normalize_text(fam)
+    if "TOTAL" in fam_norm:
+        continue
+
+    if fam_norm == "TRANSPORT":
+        montant = to_float(row[col_fam_cattc])
+        montant_ht = to_float(row[col_fam_caht])
+        tva_transport = montant - montant_ht
+    else:
+        montant = to_float(row[col_fam_caht])
+
+    if montant <= 0:
+        continue
+
     compte = famille_to_compte.get(fam, "707000000")
+
     ecritures.append({
         "DATE": date_ecriture.strftime("%d/%m/%Y"),
         "CODE JOURNAL": journal_code,
@@ -257,9 +278,18 @@ for _, row in df_familles.iterrows():
 # 2️⃣ TVA collectée
 for _, row in df_tva.iterrows():
     lib = normalize_text(row["LIBELLE TVA"])
-    if "EXONERE" in lib or "TOTAL" in lib or pd.isna(row["TVA"]): continue
+    if "EXONERE" in lib or "TOTAL" in lib or pd.isna(row["TVA"]) or lib == "TRANSPORT":
+        continue
+
     montant_tva = to_float(row["TVA"])
-    if montant_tva <= 0: continue
+    # enlever TVA transport
+    if tva_transport > 0:
+        montant_tva -= tva_transport
+        tva_transport = 0
+
+    if montant_tva <= 0:
+        continue
+
     taux = parse_taux(row["Taux"])
     compte = tva_to_compte.get(taux)
     if compte:
@@ -319,7 +349,14 @@ for _, row in df_point.iterrows():
 # ==============================
 # Vérification équilibre
 # ==============================
+if len(ecritures) == 0:
+    st.error("Aucune écriture générée à partir du fichier.")
+    st.stop()
+
 df_ecritures = pd.DataFrame(ecritures)
+df_ecritures["DEBIT"] = df_ecritures["DEBIT"].round(2)
+df_ecritures["CREDIT"] = df_ecritures["CREDIT"].round(2)
+
 total_debit  = df_ecritures["DEBIT"].sum()
 total_credit = df_ecritures["CREDIT"].sum()
 st.write("Total DEBIT :", total_debit)
